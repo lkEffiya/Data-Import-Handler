@@ -1,0 +1,25 @@
+spring.application.name=dih
+
+# Global fetch batch size (configurable)
+app.batch-size=
+
+# Database 1 configuration
+app.databases[0].url=
+app.databases[0].username=
+app.databases[0].password=
+app.databases[0].schema=
+app.databases[0].tables[0].name=
+app.databases[0].tables[0].columns=
+app.databases[0].tables[1].name=
+app.databases[0].tables[1].columns=
+
+# Database 2 configuration
+app.databases[1].url=
+app.databases[1].username=
+app.databases[1].password=
+app.databases[1].schema=
+app.databases[1].tables[0].name=
+app.databases[1].tables[0].columns=
+app.databases[1].tables[1].name=
+app.databases[1].tables[1].columns=
+
