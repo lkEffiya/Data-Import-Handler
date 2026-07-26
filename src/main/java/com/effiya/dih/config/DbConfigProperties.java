@@ -29,11 +29,20 @@ public class DbConfigProperties {
     }
 
     public static class DatabaseConfig {
+        private String name;
         private String url;
         private String username;
         private String password;
         private String schema;
         private List<TableConfig> tables;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
 
         public String getUrl() {
             return url;
@@ -79,6 +88,9 @@ public class DbConfigProperties {
     public static class TableConfig {
         private String name;
         private String columns;
+        private String primaryKey;
+        private String core;
+        private String fields;
 
         public String getName() {
             return name;
@@ -94,6 +106,30 @@ public class DbConfigProperties {
 
         public void setColumns(String columns) {
             this.columns = columns;
+        }
+
+        public String getPrimaryKey() {
+            return primaryKey;
+        }
+
+        public void setPrimaryKey(String primaryKey) {
+            this.primaryKey = primaryKey;
+        }
+
+        public String getCore() {
+            return core;
+        }
+
+        public void setCore(String core) {
+            this.core = core;
+        }
+
+        public String getFields() {
+            return fields;
+        }
+
+        public void setFields(String fields) {
+            this.fields = fields;
         }
     }
 }

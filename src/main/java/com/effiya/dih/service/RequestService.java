@@ -4,4 +4,6 @@ import java.io.OutputStream;
 
 public interface RequestService {
     void streamAllData(OutputStream outputStream);
+    public void fullLoad();
+    public void incrementalLoad();
 }
