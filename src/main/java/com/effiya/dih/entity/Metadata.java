@@ -11,15 +11,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "dih_metadata_lk")
 @Data
-@Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Metadata {
@@ -38,7 +34,7 @@ public class Metadata {
     private String core;
 
     @Column(name = "created_dttm")
-    private LocalDateTime createdDttm;;
+    private LocalDateTime createdDttm;
 
     @Column(name = "updated_dttm")
     private LocalDateTime updatedDttm;

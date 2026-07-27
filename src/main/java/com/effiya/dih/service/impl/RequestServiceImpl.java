@@ -88,6 +88,7 @@ public class RequestServiceImpl implements RequestService {
                         }
                     } catch (Exception e) {
                         logger.error("Error processing row during full load", e);
+                        throw new RuntimeException("Error processing row during full load", e);
                     }
                 });
 
@@ -104,9 +105,10 @@ public class RequestServiceImpl implements RequestService {
         if (dbConfigProperties.getDatabases() == null) return;
 
         for (DbConfigProperties.DatabaseConfig dbConfig : dbConfigProperties.getDatabases()) {
-            if (dbConfig.getTables() == null) continue;
+            if (dbConfig.getTables() == null && dbConfig.getArchivedTables() == null) continue;
 
-            for (DbConfigProperties.TableConfig tableConfig : dbConfig.getTables()) {
+            for (int i = 0; i < dbConfig.getTables().size(); i++) {
+                DbConfigProperties.TableConfig tableConfig = dbConfig.getTables().get(i);
                 String coreName = tableConfig.getCore();
                 if (coreName == null || coreName.isEmpty()) continue;
 
@@ -123,6 +125,37 @@ public class RequestServiceImpl implements RequestService {
 
                 logger.info("Starting INCREMENTAL LOAD for table: {} from timestamp: {}", tableConfig.getName(), lastSyncDttm);
 
+                String archiveTableName = null;
+                String archiveTablePrimaryKey = null;
+                
+                if (dbConfig.getArchivedTables() != null && dbConfig.getArchivedTables().size() > i) {
+                    archiveTableName = dbConfig.getArchivedTables().get(i).getName();
+                    archiveTablePrimaryKey = dbConfig.getArchivedTables().get(i).getPrimaryKey();
+                }
+
+                if (archiveTableName != null && !archiveTableName.isEmpty()) {
+                    logger.info("Processing deletions from archive table: {}", archiveTableName);
+                    List<String> deleteIds = new ArrayList<>();
+                    String finalArchiveTablePrimaryKey = archiveTablePrimaryKey != null ? archiveTablePrimaryKey : tableConfig.getPrimaryKey();
+                    requestDao.processArchivedTableData(dbConfig, archiveTableName, finalArchiveTablePrimaryKey, dbConfigProperties.getBatchSize(), lastSyncDttm, rs -> {
+                        try {
+                            String pkValue = String.valueOf(rs.getObject(finalArchiveTablePrimaryKey)).trim();
+                            deleteIds.add(pkValue);
+                            if (deleteIds.size() >= dbConfigProperties.getBatchSize()) {
+                                solrApiServiceHelper.deleteDocumentsByIds(coreName, deleteIds);
+                                deleteIds.clear();
+                            }
+                        } catch (Exception e) {
+                            logger.error("Error processing row during archive data load", e);
+                            throw new RuntimeException("Error processing row during archive data load", e);
+                        }
+                    });
+                    if (!deleteIds.isEmpty()) {
+                        System.out.println("deleted ids: "+deleteIds);
+                        solrApiServiceHelper.deleteDocumentsByIds(coreName, deleteIds);
+                    }
+                }
+
                 List<Map<String, Object>> batch = new ArrayList<>();
                 final String[] lastSyncPk = {lastSyncPrimaryKey};
                 LocalDateTime syncTime = LocalDateTime.now();
@@ -131,8 +164,8 @@ public class RequestServiceImpl implements RequestService {
                     try {
                         int columnCount = rs.getMetaData().getColumnCount();
                         Map<String, Object> row = new ConcurrentHashMap<>();
-                        for (int i = 1; i <= columnCount; i++) {
-                            row.put(rs.getMetaData().getColumnLabel(i), rs.getObject(i));
+                        for (int colIdx = 1; colIdx <= columnCount; colIdx++) {
+                            row.put(rs.getMetaData().getColumnLabel(colIdx), rs.getObject(colIdx));
                         }
                         batch.add(row);
 
@@ -145,6 +178,7 @@ public class RequestServiceImpl implements RequestService {
                         }
                     } catch (Exception e) {
                         logger.error("Error processing row during incremental load", e);
+                        throw new RuntimeException("Error processing row during incremental load", e);
                     }
                 });
 

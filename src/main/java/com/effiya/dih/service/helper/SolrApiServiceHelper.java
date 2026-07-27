@@ -42,4 +42,19 @@ public class SolrApiServiceHelper {
             throw new RuntimeException("Solr add documents failed", e);
         }
     }
+
+    public void deleteDocumentsByIds(String coreName, List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        try {
+            org.apache.solr.client.solrj.response.UpdateResponse deleteResponse = solrClient.deleteById(coreName, ids);
+            org.apache.solr.client.solrj.response.UpdateResponse commitResponse = solrClient.commit(coreName);
+            logger.info("Successfully deleted {} documents from core: {}. Delete status: {}, Commit status: {}", 
+                        ids.size(), coreName, deleteResponse.getStatus(), commitResponse.getStatus());
+        } catch (Exception e) {
+            logger.error("Failed to delete documents from core: {}", coreName, e);
+            throw new RuntimeException("Solr delete documents failed", e);
+        }
+    }
 }

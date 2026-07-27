@@ -35,6 +35,7 @@ public class DbConfigProperties {
         private String password;
         private String schema;
         private List<TableConfig> tables;
+        private List<ArchivedTableConfig> archivedTables;
 
         public String getName() {
             return name;
@@ -83,6 +84,14 @@ public class DbConfigProperties {
         public void setTables(List<TableConfig> tables) {
             this.tables = tables;
         }
+
+        public List<ArchivedTableConfig> getArchivedTables() {
+            return archivedTables;
+        }
+
+        public void setArchivedTables(List<ArchivedTableConfig> archivedTables) {
+            this.archivedTables = archivedTables;
+        }
     }
 
     public static class TableConfig {
@@ -91,6 +100,7 @@ public class DbConfigProperties {
         private String primaryKey;
         private String core;
         private String fields;
+        private String archiveTable;
 
         public String getName() {
             return name;
@@ -130,6 +140,35 @@ public class DbConfigProperties {
 
         public void setFields(String fields) {
             this.fields = fields;
+        }
+
+        public String getArchiveTable() {
+            return archiveTable;
+        }
+
+        public void setArchiveTable(String archiveTable) {
+            this.archiveTable = archiveTable;
+        }
+    }
+
+    public static class ArchivedTableConfig {
+        private String name;
+        private String primaryKey;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getPrimaryKey() {
+            return primaryKey;
+        }
+
+        public void setPrimaryKey(String primaryKey) {
+            this.primaryKey = primaryKey;
         }
     }
 }

@@ -60,20 +60,45 @@ public class RequestServiceDaoImpl implements RequestServiceDao {
         String columns = tableConfig.getColumns() != null ? tableConfig.getColumns() : "*";
         String primaryKey=tableConfig.getPrimaryKey();
         
+        Object pkParam = lastSyncPrimaryKey;
+        try {
+            pkParam = Long.parseLong(lastSyncPrimaryKey);
+        } catch (NumberFormatException e) {
+            // Keep as string if it's not a number (e.g. UUID)
+        }
+
         // Basic incremental query logic
         String sql = "SELECT " + columns + " FROM " + tableName + 
-                     " WHERE updated_dttm > '"+lastSyncDttm + "'" +
-                     " OR (updated_dttm = '"+lastSyncDttm+"' AND " + primaryKey + " > "+lastSyncPrimaryKey+") " +
+                     " WHERE updated_dttm > ?" +
+                     " OR (updated_dttm = ? AND " + primaryKey + " > ?) " +
                      " ORDER BY updated_dttm ASC, " + primaryKey + " ASC";
         
-        // Ensure you cast string primary keys correctly or let JDBC handle it
-        jdbcTemplate.query(sql, rowCallbackHandler);
+        jdbcTemplate.query(sql, rowCallbackHandler, java.sql.Timestamp.valueOf(lastSyncDttm), java.sql.Timestamp.valueOf(lastSyncDttm), pkParam);
+    }
+
+    @Override
+    public void processArchivedTableData(DbConfigProperties.DatabaseConfig dbConfig, String archiveTableName, String primaryKeyColumn, int fetchSize, java.time.LocalDateTime lastSyncDttm, RowCallbackHandler rowCallbackHandler) {
+        if (archiveTableName == null || archiveTableName.isEmpty()) {
+            return;
+        }
+        HikariDataSource dataSource = getDataSource(dbConfig);
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate.setFetchSize(fetchSize);
+
+        String tableName = (dbConfig.getSchema() != null && !dbConfig.getSchema().isEmpty())
+                ? dbConfig.getSchema() + "." + archiveTableName
+                : archiveTableName;
+
+        String sql = "SELECT " + primaryKeyColumn + " FROM " + tableName +
+                     " WHERE updated_dttm > ?";
+
+        jdbcTemplate.query(sql, rowCallbackHandler, java.sql.Timestamp.valueOf(lastSyncDttm));
     }
 
     @PreDestroy
     public void cleanup() {
         for (HikariDataSource ds : dataSourceCache.values()) {
-            if (ds != null && !ds.isClosed()) {
+            if (ds != null && ds.isRunning()) {
                 ds.close();
             }
         }
