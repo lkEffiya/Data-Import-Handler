@@ -22,8 +22,6 @@ public class SolrDocumentServiceHelper {
         String[] solrFields = tableConfig.getFields().split(",");
 
         if (dbColumns.length != solrFields.length) {
-            // If they are strictly * then we'd need to just map directly, but user configured specific fields.
-            // If it's *, we map key to key.
             if (!"*".equals(tableConfig.getColumns().trim())) {
                 throw new IllegalArgumentException("Mismatch in configured columns and solr fields length for table: " + tableConfig.getName());
             }
@@ -35,7 +33,7 @@ public class SolrDocumentServiceHelper {
             if ("*".equals(tableConfig.getColumns().trim())) {
                 // If wildcard, map key directly to solr field with same name
                 for (Map.Entry<String, Object> entry : row.entrySet()) {
-                    doc.addField(entry.getKey(), entry.getValue());
+                    doc.addField(entry.getKey(), convertValue(entry.getValue()));
                 }
             } else {
                 for (int i = 0; i < dbColumns.length; i++) {
@@ -43,7 +41,7 @@ public class SolrDocumentServiceHelper {
                     String solrField = solrFields[i].trim();
                     Object value = row.get(dbCol);
                     if (value != null) {
-                        doc.addField(solrField, value);
+                        doc.addField(solrField, convertValue(value));
                     }
                 }
             }
@@ -51,5 +49,12 @@ public class SolrDocumentServiceHelper {
         }
 
         return docs;
+    }
+
+    private Object convertValue(Object value) {
+        if (value instanceof java.math.BigDecimal) {
+            return ((java.math.BigDecimal) value).toPlainString();
+        }
+        return value;
     }
 }

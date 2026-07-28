@@ -25,6 +25,7 @@ public class RequestServiceDaoImpl implements RequestServiceDao {
             config.setPassword(dbConfig.getPassword());
             config.setMaximumPoolSize(10);
             config.setMinimumIdle(2);
+            config.setAutoCommit(false);
             config.addDataSourceProperty("cachePrepStmts", "true");
             config.addDataSourceProperty("prepStmtCacheSize", "250");
             config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
@@ -43,6 +44,9 @@ public class RequestServiceDaoImpl implements RequestServiceDao {
                 : tableConfig.getName();
 
         String sql = "SELECT " + tableConfig.getColumns() + " FROM " + tableName;
+        if (tableConfig.getPrimaryKey() != null && !tableConfig.getPrimaryKey().isEmpty()) {
+            sql += " ORDER BY " + tableConfig.getPrimaryKey() + " ASC";
+        }
 
         jdbcTemplate.query(sql, rowCallbackHandler);
     }

@@ -68,33 +68,59 @@ public class RequestServiceImpl implements RequestService {
 
                 List<Map<String, Object>> batch = new ArrayList<>();
                 final String[] lastSyncPk = {null};
+                final String[] lastSuccessfulPk = {null};
                 LocalDateTime syncTime = LocalDateTime.now();
 
-                requestDao.processTableData(dbConfig, tableConfig, dbConfigProperties.getBatchSize(), rs -> {
-                    try {
-                        int columnCount = rs.getMetaData().getColumnCount();
-                        Map<String, Object> row = new ConcurrentHashMap<>();
-                        for (int i = 1; i <= columnCount; i++) {
-                            row.put(rs.getMetaData().getColumnLabel(i), rs.getObject(i));
-                        }
-                        batch.add(row);
-                        
-                        if (tableConfig.getPrimaryKey() != null && row.get(tableConfig.getPrimaryKey()) != null) {
-                            lastSyncPk[0] = String.valueOf(row.get(tableConfig.getPrimaryKey()));
-                        }
+                try {
+                    requestDao.processTableData(dbConfig, tableConfig, dbConfigProperties.getBatchSize(), rs -> {
+                        try {
+                            java.sql.ResultSetMetaData metaData = rs.getMetaData();
+                            int columnCount = metaData.getColumnCount();
+                            Map<String, Object> row = new java.util.HashMap<>();
+                            for (int i = 1; i <= columnCount; i++) {
+                                Object val = rs.getObject(i);
+                                if (val != null) {
+                                    row.put(metaData.getColumnLabel(i), val);
+                                }
+                            }
+                            batch.add(row);
+                            
+                            if (tableConfig.getPrimaryKey() != null && row.get(tableConfig.getPrimaryKey()) != null) {
+                                lastSyncPk[0] = String.valueOf(row.get(tableConfig.getPrimaryKey()));
+                            }
 
-                        if (batch.size() >= dbConfigProperties.getBatchSize()) {
-                            processBatch(coreName, dbConfig, tableConfig, batch, syncTime, lastSyncPk[0]);
+                            if (batch.size() >= dbConfigProperties.getBatchSize()) {
+                                processBatch(coreName, tableConfig, batch, lastSyncPk[0], lastSuccessfulPk);
+                            }
+                        } catch (Exception e) {
+                            logger.error("Error processing row during full load", e);
+                            throw new RuntimeException("Error processing row during full load", e);
                         }
-                    } catch (Exception e) {
-                        logger.error("Error processing row during full load", e);
-                        throw new RuntimeException("Error processing row during full load", e);
+                    });
+
+                    // Process remaining
+                    if (!batch.isEmpty()) {
+                        processBatch(coreName, tableConfig, batch, lastSyncPk[0], lastSuccessfulPk);
                     }
-                });
 
-                // Process remaining
-                if (!batch.isEmpty()) {
-                    processBatch(coreName, dbConfig, tableConfig, batch, syncTime, lastSyncPk[0]);
+                    if (lastSuccessfulPk[0] != null) {
+                        solrApiServiceHelper.commit(coreName);
+                        updateMetadataServiceHelper.updateMetadata(dbConfig.getName(), tableConfig.getName(), coreName, syncTime, lastSuccessfulPk[0]);
+                    } else if (lastSyncPk[0] == null) {
+                        updateMetadataServiceHelper.updateMetadata(dbConfig.getName(), tableConfig.getName(), coreName, syncTime, "0");
+                    }
+                } catch (Exception e) {
+                    logger.error("Exception occurred during full load for table {}. Checkpointing successful batches.", tableConfig.getName(), e);
+                    if (lastSuccessfulPk[0] != null) {
+                        try {
+                            solrApiServiceHelper.commit(coreName);
+                            updateMetadataServiceHelper.updateMetadata(dbConfig.getName(), tableConfig.getName(), coreName, syncTime, lastSuccessfulPk[0]);
+                            logger.info("Successfully checkpointed data up to PK {} before throwing exception.", lastSuccessfulPk[0]);
+                        } catch (Exception checkpointEx) {
+                            logger.error("Failed to checkpoint during exception handling", checkpointEx);
+                        }
+                    }
+                    throw e;
                 }
             }
         }
@@ -158,42 +184,69 @@ public class RequestServiceImpl implements RequestService {
 
                 List<Map<String, Object>> batch = new ArrayList<>();
                 final String[] lastSyncPk = {lastSyncPrimaryKey};
+                final String[] lastSuccessfulPk = {null};
                 LocalDateTime syncTime = LocalDateTime.now();
 
-                requestDao.processIncrementalTableData(dbConfig, tableConfig, dbConfigProperties.getBatchSize(), lastSyncDttm, lastSyncPrimaryKey, rs -> {
-                    try {
-                        int columnCount = rs.getMetaData().getColumnCount();
-                        Map<String, Object> row = new ConcurrentHashMap<>();
-                        for (int colIdx = 1; colIdx <= columnCount; colIdx++) {
-                            row.put(rs.getMetaData().getColumnLabel(colIdx), rs.getObject(colIdx));
-                        }
-                        batch.add(row);
+                try {
+                    requestDao.processIncrementalTableData(dbConfig, tableConfig, dbConfigProperties.getBatchSize(), lastSyncDttm, lastSyncPrimaryKey, rs -> {
+                        try {
+                            java.sql.ResultSetMetaData metaData = rs.getMetaData();
+                            int columnCount = metaData.getColumnCount();
+                            Map<String, Object> row = new java.util.HashMap<>();
+                            for (int colIdx = 1; colIdx <= columnCount; colIdx++) {
+                                Object val = rs.getObject(colIdx);
+                                if (val != null) {
+                                    row.put(metaData.getColumnLabel(colIdx), val);
+                                }
+                            }
+                            batch.add(row);
 
-                        if (tableConfig.getPrimaryKey() != null && row.get(tableConfig.getPrimaryKey()) != null) {
-                            lastSyncPk[0] = String.valueOf(row.get(tableConfig.getPrimaryKey()));
-                        }
+                            if (tableConfig.getPrimaryKey() != null && row.get(tableConfig.getPrimaryKey()) != null) {
+                                lastSyncPk[0] = String.valueOf(row.get(tableConfig.getPrimaryKey()));
+                            }
 
-                        if (batch.size() >= dbConfigProperties.getBatchSize()) {
-                            processBatch(coreName, dbConfig, tableConfig, batch, syncTime, lastSyncPk[0]);
+                            if (batch.size() >= dbConfigProperties.getBatchSize()) {
+                                processBatch(coreName, tableConfig, batch, lastSyncPk[0], lastSuccessfulPk);
+                            }
+                        } catch (Exception e) {
+                            logger.error("Error processing row during incremental load", e);
+                            throw new RuntimeException("Error processing row during incremental load", e);
                         }
-                    } catch (Exception e) {
-                        logger.error("Error processing row during incremental load", e);
-                        throw new RuntimeException("Error processing row during incremental load", e);
+                    });
+
+                    // Process remaining
+                    if (!batch.isEmpty()) {
+                        processBatch(coreName, tableConfig, batch, lastSyncPk[0], lastSuccessfulPk);
                     }
-                });
 
-                // Process remaining
-                if (!batch.isEmpty()) {
-                    processBatch(coreName, dbConfig, tableConfig, batch, syncTime, lastSyncPk[0]);
+                    if (lastSuccessfulPk[0] != null) {
+                        solrApiServiceHelper.commit(coreName);
+                        updateMetadataServiceHelper.updateMetadata(dbConfig.getName(), tableConfig.getName(), coreName, syncTime, lastSuccessfulPk[0]);
+                    } else {
+                        // Update syncTime even if no new rows, so it advances the clock
+                        updateMetadataServiceHelper.updateMetadata(dbConfig.getName(), tableConfig.getName(), coreName, syncTime, lastSyncPrimaryKey);
+                    }
+                } catch (Exception e) {
+                    logger.error("Exception occurred during incremental load for table {}. Checkpointing successful batches.", tableConfig.getName(), e);
+                    if (lastSuccessfulPk[0] != null) {
+                        try {
+                            solrApiServiceHelper.commit(coreName);
+                            updateMetadataServiceHelper.updateMetadata(dbConfig.getName(), tableConfig.getName(), coreName, syncTime, lastSuccessfulPk[0]);
+                            logger.info("Successfully checkpointed incremental data up to PK {} before throwing exception.", lastSuccessfulPk[0]);
+                        } catch (Exception checkpointEx) {
+                            logger.error("Failed to checkpoint during exception handling", checkpointEx);
+                        }
+                    }
+                    throw e;
                 }
             }
         }
     }
 
-    private void processBatch(String coreName, DbConfigProperties.DatabaseConfig dbConfig, DbConfigProperties.TableConfig tableConfig, List<Map<String, Object>> batch, LocalDateTime syncTime, String lastSyncPk) {
+    private void processBatch(String coreName, DbConfigProperties.TableConfig tableConfig, List<Map<String, Object>> batch, String currentPk, String[] lastSuccessfulPk) {
         List<SolrInputDocument> docs = solrDocumentServiceHelper.convertToSolrDocuments(batch, tableConfig);
         solrApiServiceHelper.addDocuments(coreName, docs);
-        updateMetadataServiceHelper.updateMetadata(dbConfig.getName(), tableConfig.getName(), coreName, syncTime, lastSyncPk);
+        lastSuccessfulPk[0] = currentPk;
         batch.clear();
     }
 
