@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class RequestServiceImpl implements RequestService {
@@ -151,19 +150,17 @@ public class RequestServiceImpl implements RequestService {
 
                 logger.info("Starting INCREMENTAL LOAD for table: {} from timestamp: {}", tableConfig.getName(), lastSyncDttm);
 
-                String archiveTableName = null;
-                String archiveTablePrimaryKey = null;
+                DbConfigProperties.ArchivedTableConfig archiveConfig = null;
                 
                 if (dbConfig.getArchivedTables() != null && dbConfig.getArchivedTables().size() > i) {
-                    archiveTableName = dbConfig.getArchivedTables().get(i).getName();
-                    archiveTablePrimaryKey = dbConfig.getArchivedTables().get(i).getPrimaryKey();
+                    archiveConfig = dbConfig.getArchivedTables().get(i);
                 }
 
-                if (archiveTableName != null && !archiveTableName.isEmpty()) {
-                    logger.info("Processing deletions from archive table: {}", archiveTableName);
+                if (archiveConfig != null && archiveConfig.getName() != null && !archiveConfig.getName().isEmpty()) {
+                    logger.info("Processing deletions from archive table: {}", archiveConfig.getName());
                     List<String> deleteIds = new ArrayList<>();
-                    String finalArchiveTablePrimaryKey = archiveTablePrimaryKey != null ? archiveTablePrimaryKey : tableConfig.getPrimaryKey();
-                    requestDao.processArchivedTableData(dbConfig, archiveTableName, finalArchiveTablePrimaryKey, dbConfigProperties.getBatchSize(), lastSyncDttm, rs -> {
+                    String finalArchiveTablePrimaryKey = archiveConfig.getPrimaryKey() != null ? archiveConfig.getPrimaryKey() : tableConfig.getPrimaryKey();
+                    requestDao.processArchivedTableData(dbConfig, archiveConfig, finalArchiveTablePrimaryKey, dbConfigProperties.getBatchSize(), lastSyncDttm, rs -> {
                         try {
                             String pkValue = String.valueOf(rs.getObject(finalArchiveTablePrimaryKey)).trim();
                             deleteIds.add(pkValue);

@@ -101,7 +101,8 @@ public class DbConfigProperties {
         private String core;
         private String fields;
         private String archiveTable;
-
+        private String query;
+        private String deltaQuery;
         public String getName() {
             return name;
         }
@@ -149,11 +150,28 @@ public class DbConfigProperties {
         public void setArchiveTable(String archiveTable) {
             this.archiveTable = archiveTable;
         }
+
+        public String getQuery() {
+            return query;
+        }
+
+        public void setQuery(String query) {
+            this.query = query;
+        }
+
+        public String getDeltaQuery() {
+            return deltaQuery;
+        }
+
+        public void setDeltaQuery(String deltaQuery) {
+            this.deltaQuery = deltaQuery;
+        }
     }
 
     public static class ArchivedTableConfig {
         private String name;
         private String primaryKey;
+        private String deletePkQuery;
 
         public String getName() {
             return name;
@@ -169,6 +187,14 @@ public class DbConfigProperties {
 
         public void setPrimaryKey(String primaryKey) {
             this.primaryKey = primaryKey;
+        }
+
+        public String getDeletePkQuery() {
+            return deletePkQuery;
+        }
+
+        public void setDeletePkQuery(String deletePkQuery) {
+            this.deletePkQuery = deletePkQuery;
         }
     }
 }

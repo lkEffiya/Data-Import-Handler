@@ -8,6 +8,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,13 +41,16 @@ public class RequestServiceDaoImpl implements RequestServiceDao {
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         jdbcTemplate.setFetchSize(fetchSize);
 
-        String tableName = (dbConfig.getSchema() != null && !dbConfig.getSchema().isEmpty())
-                ? dbConfig.getSchema() + "." + tableConfig.getName()
-                : tableConfig.getName();
+        String sql = tableConfig.getQuery();
+        if (sql == null || sql.trim().isEmpty()) {
+            String tableName = (dbConfig.getSchema() != null && !dbConfig.getSchema().isEmpty())
+                    ? dbConfig.getSchema() + "." + tableConfig.getName()
+                    : tableConfig.getName();
 
-        String sql = "SELECT " + tableConfig.getColumns() + " FROM " + tableName;
-        if (tableConfig.getPrimaryKey() != null && !tableConfig.getPrimaryKey().isEmpty()) {
-            sql += " ORDER BY " + tableConfig.getPrimaryKey() + " ASC";
+            sql = "SELECT " + tableConfig.getColumns() + " FROM " + tableName;
+            if (tableConfig.getPrimaryKey() != null && !tableConfig.getPrimaryKey().isEmpty()) {
+                sql += " ORDER BY " + tableConfig.getPrimaryKey() + " ASC";
+            }
         }
 
         jdbcTemplate.query(sql, rowCallbackHandler);
@@ -56,14 +61,8 @@ public class RequestServiceDaoImpl implements RequestServiceDao {
         HikariDataSource dataSource = getDataSource(dbConfig);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         jdbcTemplate.setFetchSize(fetchSize);
+        NamedParameterJdbcTemplate namedJdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
 
-        String tableName = (dbConfig.getSchema() != null && !dbConfig.getSchema().isEmpty())
-                ? dbConfig.getSchema() + "." + tableConfig.getName()
-                : tableConfig.getName();
-
-        String columns = tableConfig.getColumns() != null ? tableConfig.getColumns() : "*";
-        String primaryKey=tableConfig.getPrimaryKey();
-        
         Object pkParam = lastSyncPrimaryKey;
         try {
             pkParam = Long.parseLong(lastSyncPrimaryKey);
@@ -71,32 +70,52 @@ public class RequestServiceDaoImpl implements RequestServiceDao {
             // Keep as string if it's not a number (e.g. UUID)
         }
 
-        // Basic incremental query logic
-        String sql = "SELECT " + columns + " FROM " + tableName + 
-                     " WHERE updated_dttm > ?" +
-                     " OR (updated_dttm = ? AND " + primaryKey + " > ?) " +
-                     " ORDER BY updated_dttm ASC, " + primaryKey + " ASC";
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        params.addValue("lastSyncDttm", java.sql.Timestamp.valueOf(lastSyncDttm));
+        params.addValue("lastSyncPrimaryKey", pkParam);
+
+        String sql = tableConfig.getDeltaQuery();
+        if (sql == null || sql.trim().isEmpty()) {
+            String tableName = (dbConfig.getSchema() != null && !dbConfig.getSchema().isEmpty())
+                    ? dbConfig.getSchema() + "." + tableConfig.getName()
+                    : tableConfig.getName();
+
+            String columns = tableConfig.getColumns() != null ? tableConfig.getColumns() : "*";
+            String primaryKey = tableConfig.getPrimaryKey();
+
+            sql = "SELECT " + columns + " FROM " + tableName + 
+                         " WHERE updated_dttm > :lastSyncDttm" +
+                         " OR (updated_dttm = :lastSyncDttm AND " + primaryKey + " > :lastSyncPrimaryKey) " +
+                         " ORDER BY updated_dttm ASC, " + primaryKey + " ASC";
+        }
         
-        jdbcTemplate.query(sql, rowCallbackHandler, java.sql.Timestamp.valueOf(lastSyncDttm), java.sql.Timestamp.valueOf(lastSyncDttm), pkParam);
+        namedJdbcTemplate.query(sql, params, rowCallbackHandler);
     }
 
     @Override
-    public void processArchivedTableData(DbConfigProperties.DatabaseConfig dbConfig, String archiveTableName, String primaryKeyColumn, int fetchSize, java.time.LocalDateTime lastSyncDttm, RowCallbackHandler rowCallbackHandler) {
-        if (archiveTableName == null || archiveTableName.isEmpty()) {
+    public void processArchivedTableData(DbConfigProperties.DatabaseConfig dbConfig, DbConfigProperties.ArchivedTableConfig archiveConfig, String primaryKeyColumn, int fetchSize, java.time.LocalDateTime lastSyncDttm, RowCallbackHandler rowCallbackHandler) {
+        if (archiveConfig == null || archiveConfig.getName() == null || archiveConfig.getName().isEmpty()) {
             return;
         }
         HikariDataSource dataSource = getDataSource(dbConfig);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         jdbcTemplate.setFetchSize(fetchSize);
+        NamedParameterJdbcTemplate namedJdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
 
-        String tableName = (dbConfig.getSchema() != null && !dbConfig.getSchema().isEmpty())
-                ? dbConfig.getSchema() + "." + archiveTableName
-                : archiveTableName;
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        params.addValue("lastSyncDttm", java.sql.Timestamp.valueOf(lastSyncDttm));
 
-        String sql = "SELECT " + primaryKeyColumn + " FROM " + tableName +
-                     " WHERE updated_dttm > ?";
+        String sql = archiveConfig.getDeletePkQuery();
+        if (sql == null || sql.trim().isEmpty()) {
+            String tableName = (dbConfig.getSchema() != null && !dbConfig.getSchema().isEmpty())
+                    ? dbConfig.getSchema() + "." + archiveConfig.getName()
+                    : archiveConfig.getName();
 
-        jdbcTemplate.query(sql, rowCallbackHandler, java.sql.Timestamp.valueOf(lastSyncDttm));
+            sql = "SELECT " + primaryKeyColumn + " FROM " + tableName +
+                         " WHERE updated_dttm > :lastSyncDttm";
+        }
+
+        namedJdbcTemplate.query(sql, params, rowCallbackHandler);
     }
 
     @PreDestroy

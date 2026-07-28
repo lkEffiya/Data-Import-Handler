@@ -9,5 +9,5 @@ public interface RequestServiceDao {
     void processTableData(DbConfigProperties.DatabaseConfig dbConfig, DbConfigProperties.TableConfig tableConfig, int fetchSize, RowCallbackHandler rowCallbackHandler);
     void processIncrementalTableData(DbConfigProperties.DatabaseConfig dbConfig, DbConfigProperties.TableConfig tableConfig, int fetchSize, LocalDateTime lastSyncDttm, String lastSyncPrimaryKey, RowCallbackHandler rowCallbackHandler);
 
-    void processArchivedTableData(DbConfigProperties.DatabaseConfig dbConfig, String archiveTableName, String primaryKeyColumn, int fetchSize, LocalDateTime lastSyncDttm, RowCallbackHandler rowCallbackHandler);
+    void processArchivedTableData(DbConfigProperties.DatabaseConfig dbConfig, DbConfigProperties.ArchivedTableConfig archiveConfig, String primaryKeyColumn, int fetchSize, LocalDateTime lastSyncDttm, RowCallbackHandler rowCallbackHandler);
 }
